@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coffee Brewing Calculator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-amber-50 min-h-screen py-10 px-4">
+<div class="max-w-xl mx-auto">
+  <div class="bg-white rounded-2xl shadow-lg p-8">
+    <div class="flex items-center justify-between mb-1">
+      <h1 class="text-2xl font-bold text-gray-800">Coffee Brewing Calculator</h1>
+      <button id="tempToggle"
+        class="text-sm bg-amber-100 hover:bg-amber-200 text-amber-800 font-semibold px-3 py-1 rounded-lg transition">
+        °C / °F
+      </button>
+    </div>
+    <p class="text-gray-500 text-sm mb-6">Dial in your perfect cup.</p>
+
+    <div class="mb-5">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Brew Method</label>
+      <div class="grid grid-cols-3 gap-2">
+        <button class="method-btn bg-amber-600 text-white font-semibold py-2 rounded-lg text-sm transition" data-method="v60">V60</button>
+        <button class="method-btn bg-gray-100 text-gray-700 font-semibold py-2 rounded-lg text-sm transition hover:bg-gray-200" data-method="chemex">Chemex</button>
+        <button class="method-btn bg-gray-100 text-gray-700 font-semibold py-2 rounded-lg text-sm transition hover:bg-gray-200" data-method="french">French Press</button>
+        <button class="method-btn bg-gray-100 text-gray-700 font-semibold py-2 rounded-lg text-sm transition hover:bg-gray-200" data-method="aeropress">AeroPress</button>
+        <button class="method-btn bg-gray-100 text-gray-700 font-semibold py-2 rounded-lg text-sm transition hover:bg-gray-200" data-method="espresso">Espresso</button>
+        <button class="method-btn bg-gray-100 text-gray-700 font-semibold py-2 rounded-lg text-sm transition hover:bg-gray-200" data-method="coldbrew">Cold Brew</button>
+      </div>
+    </div>
+
+    <div class="mb-5">
+      <label for="coffeeGrams" class="block text-sm font-medium text-gray-700 mb-1">Coffee Amount (grams)</label>
+      <input id="coffeeGrams" type="number" min="1" step="0.5" value="15"
+        class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500 text-lg font-mono">
+    </div>
+
+    <div class="mb-6">
+      <label for="ratioSlider" class="block text-sm font-medium text-gray-700 mb-1">
+        Ratio Adjustment: <span id="ratioDisplay" class="font-bold text-amber-700">1:15</span>
+      </label>
+      <input id="ratioSlider" type="range" min="1" max="30" step="0.5" value="15"
+        class="w-full accent-amber-600">
+      <div class="flex justify-between text-xs text-gray-400 mt-1">
+        <span>Stronger (1:1)</span>
+        <span>Weaker (1:30)</span>
+      </div>
+    </div>
+
+    <div id="results" class="bg-amber-50 rounded-xl p-5 border border-amber-100">
+      <p class="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Brew Guide</p>
+      <div class="grid grid-cols-2 gap-3" id="resultGrid"></div>
+      <div id="grindBar" class="mt-4"></div>
+    </div>
+  </div>
+</div>
+<script>
+const METHODS = {
+  v60:       { name:'V60',         defaultRatio:15, grind:'Medium-Fine',   grindLevel:3, tempC:93, time:'3–4 min',  desc:'Bloom 30s with 2× water, then pour in circles.' },
+  chemex:    { name:'Chemex',      defaultRatio:15, grind:'Medium-Coarse', grindLevel:4, tempC:93, time:'4–5 min',  desc:'Slow, controlled pours through thick filter.' },
+  french:    { name:'French Press',defaultRatio:14, grind:'Coarse',        grindLevel:5, tempC:95, time:'4 min',    desc:'Steep fully submerged, press slowly.' },
+  aeropress: { name:'AeroPress',   defaultRatio:12, grind:'Medium-Fine',   grindLevel:3, tempC:85, time:'1–2 min',  desc:'Inverted or standard; press steadily over 30s.' },
+  espresso:  { name:'Espresso',    defaultRatio:2,  grind:'Extra Fine',    grindLevel:1, tempC:93, time:'25–30 sec',desc:'9 bar pressure; aim for ~25–30s extraction.' },
+  coldbrew:  { name:'Cold Brew',   defaultRatio:8,  grind:'Extra Coarse',  grindLevel:6, tempC:4,  time:'12–24 hr', desc:'Cold or room temp steep, then filter and refrigerate.' }
+};
+
+const GRIND_LABELS = {1:'Extra Fine',2:'Fine',3:'Medium-Fine',4:'Medium-Coarse',5:'Coarse',6:'Extra Coarse'};
+const GRIND_COLORS = {1:'bg-yellow-800',2:'bg-yellow-700',3:'bg-amber-600',4:'bg-amber-500',5:'bg-amber-400',6:'bg-amber-300'};
+
+let selMethod = 'v60';
+let useCelsius = true;
+let currentRatio = 15;
+
+function setMethodDefaults(method) {
+  const m = METHODS[method];
+  currentRatio = m.defaultRatio;
+  document.getElementById('ratioSlider').value = currentRatio;
+  document.getElementById('ratioDisplay').textContent = '1:' + currentRatio;
+}
+
+function tempDisplay(c) {
+  if (useCelsius) return c + '°C';
+  return Math.round(c * 9/5 + 32) + '°F';
+}
+
+function grindBar(level) {
+  const filled = Array.from({length:6}, (_, i) => {
+    const seg = i + 1;
+    const active = seg <= level;
+    const color = active ? GRIND_COLORS[level] : 'bg-gray-200';
+    return `<div class="flex-1 h-3 rounded-sm ${color}"></div>`;
+  }).join('');
+  return `<div class="flex gap-1 items-end mb-1">${filled}</div>
+<div class="flex justify-between text-xs text-gray-400">
+  <span>Extra Fine</span><span>Extra Coarse</span>
+</div>`;
+}
+
+function render() {
+  const grams = parseFloat(document.getElementById('coffeeGrams').value) || 15;
+  const m = METHODS[selMethod];
+  const water = Math.round(grams * currentRatio);
+  const temp = tempDisplay(m.tempC);
+
+  const isCold = selMethod === 'coldbrew';
+  const tempLabel = isCold ? 'Steep Temp' : 'Water Temp';
+
+  document.getElementById('resultGrid').innerHTML = `
+    <div class="bg-white rounded-lg p-3 shadow-sm">
+      <p class="text-xs text-gray-500">Water</p>
+      <p class="text-2xl font-bold text-amber-700">${water} ml</p>
+    </div>
+    <div class="bg-white rounded-lg p-3 shadow-sm">
+      <p class="text-xs text-gray-500">Brew Ratio</p>
+      <p class="text-2xl font-bold text-gray-800">1:${currentRatio}</p>
+    </div>
+    <div class="bg-white rounded-lg p-3 shadow-sm">
+      <p class="text-xs text-gray-500">${tempLabel}</p>
+      <p class="text-2xl font-bold text-gray-800">${temp}</p>
+    </div>
+    <div class="bg-white rounded-lg p-3 shadow-sm">
+      <p class="text-xs text-gray-500">Brew Time</p>
+      <p class="text-2xl font-bold text-gray-800">${m.time}</p>
+    </div>
+    <div class="bg-white rounded-lg p-3 shadow-sm col-span-2">
+      <p class="text-xs text-gray-500 mb-1">Grind Size — <strong>${m.grind}</strong></p>
+      ${grindBar(m.grindLevel)}
+    </div>
+    <div class="bg-amber-100 rounded-lg p-3 col-span-2">
+      <p class="text-xs font-semibold text-amber-700 mb-1">Tip</p>
+      <p class="text-sm text-amber-900">${m.desc}</p>
+    </div>`;
+}
+
+document.querySelectorAll('.method-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.method-btn').forEach(b => {
+      b.className = 'method-btn bg-gray-100 text-gray-700 font-semibold py-2 rounded-lg text-sm transition hover:bg-gray-200';
+    });
+    btn.className = 'method-btn bg-amber-600 text-white font-semibold py-2 rounded-lg text-sm transition';
+    selMethod = btn.dataset.method;
+    setMethodDefaults(selMethod);
+    render();
+  });
+});
+
+document.getElementById('ratioSlider').addEventListener('input', function() {
+  currentRatio = parseFloat(this.value);
+  document.getElementById('ratioDisplay').textContent = '1:' + currentRatio;
+  render();
+});
+
+document.getElementById('coffeeGrams').addEventListener('input', render);
+
+document.getElementById('tempToggle').addEventListener('click', () => {
+  useCelsius = !useCelsius;
+  render();
+});
+
+setMethodDefaults(selMethod);
+render();
+</script>
+</body>
+</html>
